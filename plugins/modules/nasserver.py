@@ -574,6 +574,48 @@ class NASServer(object):
             LOG.error(err_msg)
             self.module.fail_json(msg=err_msg)
 
+    def create_nas_server(self, nas_server_name, sp=None, pool=None, is_repl_dst=None, multi_proto=None, tenant=None):
+        try:
+            # Transform pool name to pool ID as NAS creation requires we use pool ID
+            pool_obj = self.unity_conn.get_pool(name=pool)
+            if sp is not None:
+                dst_sp_enum = get_sp_enum(sp)
+                obj_sp = self.unity_conn.get_sp(_id=dst_sp_enum.name.lower())
+            else:
+                obj_sp = None
+
+            obj_nas = self.unity_conn.create_nas_server(name=nas_server_name, sp=obj_sp, pool=pool_obj.id,
+                                                        is_repl_dst=is_repl_dst,
+                                                        multi_proto=multi_proto, tenant=tenant)
+
+            if not obj_nas.existed:
+                # if the nas hasn't been created, log an error and return None
+                LOG.error("NAS Server object could not be created")
+                return None
+            return obj_nas
+        except utils.HttpError as e:
+            if e.http_status == 401:
+                cred_err = "Incorrect username or password , {0}".format(
+                    e.message)
+                self.module.fail_json(msg=cred_err)
+            else:
+                err_msg = "Failed to create NAS Server" \
+                          " {0} with error {1}".format(nas_server_name, str(e))
+                LOG.error(err_msg)
+                self.module.fail_json(msg=err_msg)
+
+        except utils.UnityResourceNotFoundError as e:
+            err_msg = "Failed to create NAS Server" \
+                      " {0} with error {1}".format(nas_server_name, str(e))
+            LOG.error(err_msg)
+            return None
+
+        except Exception as e:
+            err_msg = "Failed to create nas server {0} with" \
+                      " error {1}".format(nas_server_name, str(e))
+            LOG.error(err_msg)
+            self.module.fail_json(msg=err_msg)
+
     def to_update(self, nas_server_obj, current_uds):
         LOG.info("Checking Whether the parameters are modified or not.")
 
@@ -969,6 +1011,10 @@ class NASServer(object):
         replication = self.module.params['replication_params']
         replication_state = self.module.params['replication_state']
         replication_reuse_resource = self.module.params['replication_reuse_resource']
+
+        nas_server_pool_name = self.module.params['nas_server_pool_name']
+        nas_server_tenant_name = self.module.params['nas_server_tenant_name']
+        nas_server_sp = self.module.params['nas_server_sp']
         # Get the enum for the corresponding offline_availability
         if current_uds:
             current_uds = \
@@ -989,12 +1035,15 @@ class NASServer(object):
 
         # As creation is not supported and if NAS Server does not exist
         # along with state as present, then error will be thrown.
+        # if not nas_server_obj and state == "present":
+        #     msg = "NAS Server Resource not found. Please enter a valid " \
+        #           "Name/ID to get or modify the parameters of nas server."
+        #     LOG.error(msg)
+        #     self.module.fail_json(msg=msg)
         if not nas_server_obj and state == "present":
-            msg = "NAS Server Resource not found. Please enter a valid " \
-                  "Name/ID to get or modify the parameters of nas server."
-            LOG.error(msg)
-            self.module.fail_json(msg=msg)
-
+            nas_server_obj = self.create_nas_server(nas_server_name, nas_server_sp, nas_server_pool_name,
+                                                    is_replication_destination, is_multiprotocol_enabled,
+                                                    nas_server_tenant_name)
         '''
             Update the parameters of NAS Server
         '''
@@ -1048,6 +1097,9 @@ def get_nasserver_parameters():
         current_unix_directory_service=dict(
             choices=["NIS", "LDAP", "LOCAL_THEN_NIS",
                      "LOCAL_THEN_LDAP", "NONE", "LOCAL"]),
+        nas_server_pool_name=dict(type='str'),
+        nas_server_tenant_name=dict(type='str'),
+        nas_server_sp=dict(type='str', choices=['SPA', 'SPB']),
         is_replication_destination=dict(type='bool'),
         is_backup_only=dict(type='bool'),
         is_multiprotocol_enabled=dict(type='bool'),

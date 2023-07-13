@@ -19,6 +19,20 @@
         nas_server_name: "{{ nas_server_name }}"
         state: "present"
 
+    - name: Create new NAS Server
+      dellemc.unity.nasserver:
+        unispherehost: "{{ unispherehost }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: "{{ validate_certs }}"
+        nas_server_name: "{{ nas_server_name }}"
+        nas_server_pool_name: "{{ nas_server_pool_name }}"
+        nas_server_tenant_name: "{{ nas_server_tenant_name }}"
+        nas_server_sp: "{{ nas_server_sp }}"
+        is_replication_destination: "{{ is_replication_destination }}"
+        is_multiprotocol_enabled: "{{ is_multiprotocol_enabled }}"
+        state: "present"
+
     - name: Rename NAS Server to new Name
       dellemc.unity.nasserver:
         unispherehost: "{{ unispherehost }}"
